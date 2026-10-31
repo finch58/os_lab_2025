@@ -5,7 +5,7 @@
 #include "utils.h"
 
 int main(int argc, char **argv) {
-  if (argc != 3) {
+  if (argc == 2) {
     printf("Usage: %s seed arraysize\n", argv[0]);
     return 1;
   }

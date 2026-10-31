@@ -40,24 +40,30 @@ int main(int argc, char **argv) {
         switch (option_index) {
           case 0:
             seed = atoi(optarg);
-            // your code here
-            // error handling
+            if (seed <= 0) {
+              printf("seed must be a positive number\n"); //проверки на пол(1)
+              return 1;
+            }
             break;
           case 1:
             array_size = atoi(optarg);
-            // your code here
-            // error handling
+            if (array_size <= 0) {
+              printf("array_size must be a positive number\n");
+              return 1;
+            }
             break;
           case 2:
             pnum = atoi(optarg);
-            // your code here
-            // error handling
+            if (pnum <= 0) {
+              printf("pnum must be a positive number\n");
+              return 1;
+            }
             break;
           case 3:
             with_files = true;
             break;
 
-          defalut:
+          default:
             printf("Index %d is out of options\n", option_index);
         }
         break;
@@ -88,25 +94,53 @@ int main(int argc, char **argv) {
   GenerateArray(array, array_size, seed);
   int active_child_processes = 0;
 
+  //pipe
+  int (*pipes)[2] = NULL;
+  if (!with_files) {
+    pipes = malloc(sizeof(int[2]) * pnum);
+    for (int i = 0; i < pnum; i++) {
+      if (pipe(pipes[i]) == -1) {
+        perror("pipe");
+        return 1;
+      }
+    }
+  }
+
   struct timeval start_time;
   gettimeofday(&start_time, NULL);
 
   for (int i = 0; i < pnum; i++) {
     pid_t child_pid = fork();
     if (child_pid >= 0) {
-      // successful fork
       active_child_processes += 1;
       if (child_pid == 0) {
-        // child process
-
-        // parallel somehow
+        //каждый процесс обрабатывает свой кусок массива (2)
+        unsigned int chunk = array_size / pnum;
+        unsigned int begin = i * chunk;
+        unsigned int end = (i == pnum - 1) ? (unsigned int)array_size
+                                           : begin + chunk;
+        struct MinMax local = GetMinMax(array, begin, end);
 
         if (with_files) {
-          // use files here
+          char filename[64];
+          sprintf(filename, "min_max_%d.txt", i);
+          FILE *f = fopen(filename, "w");
+          if (f == NULL) {
+            perror("fopen");
+            exit(1);
+          }
+          fprintf(f, "%d %d\n", local.min, local.max);
+          fclose(f);
         } else {
-          // use pipe here
+          //закрываем все концы, кроме записи в свой канал
+          for (int j = 0; j < pnum; j++) {
+            close(pipes[j][0]);
+            if (j != i) close(pipes[j][1]);
+          }
+          write(pipes[i][1], &local, sizeof(local));
+          close(pipes[i][1]);
         }
-        return 0;
+        exit(0);
       }
 
     } else {
@@ -115,8 +149,13 @@ int main(int argc, char **argv) {
     }
   }
 
+  //в родителе концы для записи больше не нужны
+  if (!with_files) {
+    for (int i = 0; i < pnum; i++) close(pipes[i][1]);
+  }
+
   while (active_child_processes > 0) {
-    // your code here
+    wait(NULL); //ждём завершения любого потомка
 
     active_child_processes -= 1;
   }
@@ -130,9 +169,22 @@ int main(int argc, char **argv) {
     int max = INT_MIN;
 
     if (with_files) {
-      // read from files
+      char filename[64]; //каждый потомок записывает минимум и максимум в свой файл
+      sprintf(filename, "min_max_%d.txt", i);
+      FILE *f = fopen(filename, "r");
+      if (f == NULL) {
+        perror("fopen");
+        return 1;
+      }
+      fscanf(f, "%d %d", &min, &max);
+      fclose(f);
+      remove(filename);
     } else {
-      // read from pipes
+      struct MinMax local;
+      read(pipes[i][0], &local, sizeof(local));
+      close(pipes[i][0]);
+      min = local.min;
+      max = local.max;
     }
 
     if (min < min_max.min) min_max.min = min;
@@ -146,6 +198,7 @@ int main(int argc, char **argv) {
   elapsed_time += (finish_time.tv_usec - start_time.tv_usec) / 1000.0;
 
   free(array);
+  free(pipes);
 
   printf("Min: %d\n", min_max.min);
   printf("Max: %d\n", min_max.max);
