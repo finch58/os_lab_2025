@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 int main(int argc, char **argv) {
-  if (argc != 3) {
+  if (argc == 2) {
     printf("Usage: %s seed arraysize\n", argv[0]);
     return 1;
   }
@@ -17,14 +17,14 @@ int main(int argc, char **argv) {
   }
 
   if (pid == 0) {
-    // дочерний процесс: заменяем себя программой sequential_min_max
+    //дочерний процесс: заменяем себя программой sequential_min_max
     char *args[] = {"./sequential_min_max", argv[1], argv[2], NULL};
     execv(args[0], args);
     perror("execv");
     exit(1);
   }
 
-  // родитель ждёт завершения потомка
+  //родитель ждёт завершения потомка
   int status;
   waitpid(pid, &status, 0);
   if (WIFEXITED(status))

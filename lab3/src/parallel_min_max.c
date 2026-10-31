@@ -132,7 +132,6 @@ int main(int argc, char **argv) {
           fprintf(f, "%d %d\n", local.min, local.max);
           fclose(f);
         } else {
-          //закрываем все концы, кроме записи в свой канал
           for (int j = 0; j < pnum; j++) {
             close(pipes[j][0]);
             if (j != i) close(pipes[j][1]);
